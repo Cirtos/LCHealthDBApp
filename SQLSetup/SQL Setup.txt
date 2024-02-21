@@ -1,0 +1,266 @@
+//Use Batch Insert functions to import JSONs, copy paste them in
+
+
+
+CREATE DATABASE HealthDB;
+GO
+
+USE HealthDB;
+GO
+
+CREATE SCHEMA HealthAppSchema;
+GO
+
+CREATE TABLE HealthAppSchema.Patients
+(
+    PatientId INT IDENTITY(1, 1) PRIMARY KEY
+    , FirstName NVARCHAR(50)
+    , LastName NVARCHAR(50)
+    , DateOfBirth DATETIME2
+    , Allergies NVARCHAR(50)
+    , Email NVARCHAR(50)
+    , PhoneNumber VARCHAR(30)
+);
+GO
+CREATE TABLE HealthAppSchema.Prescriptions
+(
+    PrescriptionId INT IDENTITY(1, 1) PRIMARY KEY
+    , DoctorId INT
+    , PatientId INT
+    , DrugName VARCHAR(50)
+    , Amount INT
+);
+GO
+CREATE TABLE HealthAppSchema.Appointments
+(
+    AppointmentId INT IDENTITY(1, 1) PRIMARY KEY
+    , DoctorId INT
+    , PatientId INT
+    , AppointmentDateTime DATETIME2
+);
+GO
+CREATE TABLE HealthAppSchema.Doctors
+(
+    DoctorId INT IDENTITY(1, 1) PRIMARY KEY
+    , FirstName NVARCHAR(50)
+    , LastName NVARCHAR(50)
+);
+GO
+
+CREATE OR ALTER PROCEDURE HealthAppSchema.spPatient_Upsert
+	@FirstName NVARCHAR(50),
+	@LastName NVARCHAR(50),
+	@DateOfBirth DATE,
+	@Allergies NVARCHAR(50),
+	@Email NVARCHAR(50),
+	@PhoneNumber VARCHAR(30),
+	@PatientId INT = NULL
+AS
+BEGIN
+    IF NOT EXISTS (SELECT * FROM HealthAppSchema.Patients WHERE PatientId = @PatientId)
+        BEGIN
+        IF NOT EXISTS (SELECT * FROM HealthAppSchema.Patients WHERE Email = @Email)
+            BEGIN
+
+                INSERT INTO HealthAppSchema.Patients(
+                    [FirstName],
+                    [LastName],
+                    [DateOfBirth],
+                    [Allergies],
+                    [Email],
+                    [PhoneNumber]
+                ) VALUES (
+                    @FirstName,
+                    @LastName,
+                    @DateOfBirth,
+                    @Allergies,
+                    @Email,
+                    @PhoneNumber
+                )
+            END
+        END
+    ELSE 
+        BEGIN
+            UPDATE HealthAppSchema.Patients
+                SET FirstName = @FirstName,
+                    LastName = @LastName,
+                    DateOfBirth = @DateOfBirth,
+                    Allergies = @Allergies,
+                    Email = @Email,
+                    PhoneNumber = @PhoneNumber
+                WHERE PatientId = @PatientId
+        END
+END
+GO
+
+CREATE OR ALTER PROCEDURE HealthAppSchema.spPrescription_Upsert
+    @PatientId INT,
+    @DoctorId INT,
+	@DrugName NVARCHAR(50),
+	@Amount INT,
+	@PrescriptionId INT = NULL
+AS
+BEGIN
+    IF NOT EXISTS (SELECT * FROM HealthAppSchema.Prescriptions WHERE PrescriptionId = @PrescriptionId)
+        BEGIN
+            INSERT INTO HealthAppSchema.Prescriptions(
+                [PatientId],
+                [DoctorId],
+                [DrugName],
+                [Amount]
+            ) VALUES (
+                @PatientId,
+                @DoctorId,
+                @DrugName,
+                @Amount
+            )
+        END
+    ELSE 
+        BEGIN
+            UPDATE HealthAppSchema.Prescriptions
+                SET PatientId = @PatientId,
+                    DoctorId = @DoctorId,
+                    DrugName = @DrugName,
+                    Amount = @Amount
+                WHERE PrescriptionId = @PrescriptionId
+        END
+END
+GO
+
+CREATE OR ALTER PROCEDURE HealthAppSchema.spAppointment_Upsert
+	@PatientId INT,
+    @DoctorId INT,
+	@AppointmentDateTime DATETIME2,
+	@AppointmentId INT = NULL
+AS
+BEGIN
+    IF NOT EXISTS (SELECT * FROM HealthAppSchema.Appointments WHERE AppointmentId = @AppointmentId)
+        BEGIN
+            INSERT INTO HealthAppSchema.Appointments(
+                [PatientId],
+                [DoctorId],
+                [AppointmentDateTime]
+            ) VALUES (
+                @PatientId,
+                @DoctorId,
+                @AppointmentDateTime
+            )
+        END
+    ELSE 
+        BEGIN
+            UPDATE HealthAppSchema.Appointments
+                SET PatientId = @PatientId,
+                    DoctorId = @DoctorId,
+                    AppointmentDateTime = @AppointmentDateTime
+                WHERE AppointmentId = @AppointmentId
+        END
+END
+GO
+
+CREATE OR ALTER PROCEDURE HealthAppSchema.spDoctor_Upsert
+	@FirstName NVARCHAR(50),
+	@LastName NVARCHAR(50),
+	@DoctorId INT = NULL
+AS
+BEGIN
+    IF NOT EXISTS (SELECT * FROM HealthAppSchema.Doctors WHERE DoctorId = @DoctorId)
+        BEGIN
+            INSERT INTO HealthAppSchema.Doctors(
+                [FirstName],
+                [LastName]
+            ) VALUES (
+                @FirstName,
+                @LastName
+            )
+        END
+    ELSE 
+        BEGIN
+            UPDATE HealthAppSchema.Doctors
+                SET FirstName = @FirstName,
+                    LastName = @LastName
+                WHERE @DoctorId = @DoctorId
+        END
+END
+GO
+
+CREATE OR ALTER PROCEDURE HealthAppSchema.spPatients_Get
+    @PatientId INT = NULL
+AS
+BEGIN
+    SELECT [PatientId],
+    [FirstName],
+    [LastName],
+    [DateOfBirth],
+    [Allergies],
+    [Email],
+    [PhoneNumber] FROM HealthAppSchema.Patients WHERE Patients.PatientId = ISNULL(@PatientId, Patients.PatientId)
+END
+GO
+
+CREATE OR ALTER PROCEDURE HealthAppSchema.spDoctors_Get
+    @DoctorId INT = NULL
+AS
+BEGIN
+    SELECT [DoctorId],
+    [FirstName],
+    [LastName] FROM HealthAppSchema.Doctors WHERE Doctors.DoctorId = ISNULL(@DoctorId, Doctors.DoctorId )
+END
+GO
+
+CREATE OR ALTER PROCEDURE HealthAppSchema.spAppointments_Get
+    @AppointmentId INT = NULL,
+    @DoctorId INT = NULL,
+    @PatientId INT = NULL
+AS
+BEGIN
+    SELECT * FROM HealthAppSchema.Appointments WHERE 
+    
+    Appointments.AppointmentId = ISNULL(@AppointmentId, Appointments.AppointmentId) 
+    AND Appointments.DoctorId = ISNULL(@DoctorId, Appointments.DoctorId) 
+    AND Appointments.PatientId = ISNULL(@PatientId, Appointments.PatientId)
+END
+GO
+
+CREATE OR ALTER PROCEDURE HealthAppSchema.spAppointments_Today_Get
+    @DoctorId INT = NULL
+AS
+BEGIN
+    SELECT * FROM HealthAppSchema.Appointments WHERE 
+    Appointments.DoctorId = ISNULL(@DoctorId, Appointments.DoctorId)
+    AND CAST (Appointments.AppointmentDateTime AS DATE) = CAST(GETDATE() AS DATE)
+END
+GO
+
+CREATE OR ALTER PROCEDURE HealthAppSchema.spPrescriptions_Get
+    @PrescriptionId INT = NULL,
+    @DoctorId INT = NULL,
+    @PatientId INT = NULL
+AS
+BEGIN
+    SELECT * FROM HealthAppSchema.Prescriptions WHERE
+    Prescriptions.PrescriptionId = ISNULL(@PrescriptionId, Prescriptions.PrescriptionId)
+    AND Prescriptions.DoctorId = ISNULL(@DoctorId, Prescriptions.DoctorId) 
+    AND Prescriptions.PatientId = ISNULL(@PatientId, Prescriptions.PatientId)
+END
+GO
+
+CREATE OR ALTER PROCEDURE HealthAppSchema.spPatient_Delete
+    @PatientId INT
+AS
+BEGIN
+    DECLARE @Email NVARCHAR(50);
+
+    SELECT  @Email = Patients.Email
+      FROM  HealthAppSchema.Patients
+     WHERE  Patients.PatientId = @PatientId;
+
+    DELETE  FROM HealthAppSchema.Appointments
+     WHERE  Appointments.PatientId = @PatientId;
+
+    DELETE  FROM HealthAppSchema.Prescriptions
+     WHERE  Prescriptions.PatientId = @PatientId;
+
+    DELETE  FROM HealthAppSchema.Patients
+     WHERE  Patients.PatientId = @PatientId;
+END; 
+GO
